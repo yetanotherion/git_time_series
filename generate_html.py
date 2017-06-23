@@ -24,8 +24,12 @@ class HtmlGenerator(object):
         return cls.compute_varname(name, value) + "_id"
 
     @staticmethod
-    def to_json_object(date, value):
-        return "{date: %.2f,y: %.2f}" % (date * 1000.0, value)
+    def to_data_object(date, value):
+        return "[%.2f,%.2f]" % (date, value)
+
+    @staticmethod
+    def to_ms(xys):
+        return [(xy[0] * 1000.0, xy[1]) for xy in xys]
 
     def generate_scripts(self):
         res = []
@@ -34,10 +38,14 @@ class HtmlGenerator(object):
             for (k, v) in related_time.iteritems():
                 varname = self.compute_varname(time_granularity, k)
                 divid = self.compute_divid(time_granularity, k)
-                values = ','.join([self.to_json_object(kk, vv)
+                v = self.to_ms(v)
+                values = ','.join([self.to_data_object(kk, vv)
                                    for (kk, vv) in v])
                 res.append("var %s = [%s];" % (varname, values))
-                res.append("plotData(%s, \"%s\");" % (varname, divid))
+                res.append("plotData(\"%s\", {" % (divid,))
+                res.append("   \"title\": \"%s\"," % (varname,))
+                res.append("   \"yAxisTitle\": \"%s\"," % ("count",))
+                res.append("}, %s);" % (varname,))
         return res
 
     def generate_divs(self):
@@ -46,7 +54,6 @@ class HtmlGenerator(object):
             related_time = self.data_to_plot[time_granularity]
             for k in related_time:
                 divid = self.compute_divid(time_granularity, k)
-                res.append(self.compute_varname(time_granularity, k))
                 res.append("<div id=\"%s\"></div>" % (divid,))
         return res
 
@@ -60,19 +67,8 @@ class HtmlGenerator(object):
 <html>
   <head>
     <title>Git stats</title>
-    <style>
-    body {
-      font: 12px Arial;
-    }
-    path {
-      stroke: steelblue;
-      stroke-width: 2;
-      fill: none;
-    }
-    </style>
-    <!-- Include d3 -->
-    <script src="d3.v4.min.js"></script>
-    <!-- Include the display component -->
+    <script src="highcharts.js"></script>
+    <script src="exporting.js"></script>
     <script src="display-chart.js"></script>
   </head>
   <body>

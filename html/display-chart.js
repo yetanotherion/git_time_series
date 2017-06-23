@@ -1,53 +1,58 @@
-function plotData(data, divId) {
-    var margin = {
-        top: 30,
-        right: 20,
-        bottom: 30,
-        left: 50
-    };
-    var width = 600 - margin.left - margin.right;
-    var height = 270 - margin.top - margin.bottom;
+function plotData(divId, options, data) {
 
-    var x = d3.scaleTime().range([0, width]);
-    var y = d3.scaleLinear().range([height, 0]);
+    Highcharts.chart(divId, {
+        chart: {
+            zoomType: 'x'
+        },
+        title: {
+            text: options.title
+        },
+        subtitle: {
+            text: document.ontouchstart === undefined ?
+                    'Click and drag in the plot area to zoom in' : 'Pinch the chart to zoom in'
+        },
+        xAxis: {
+            type: 'datetime'
+        },
+        yAxis: {
+            title: {
+                text: options.yAxisTitle
+            }
+        },
+        legend: {
+            enabled: false
+        },
+        plotOptions: {
+            area: {
+                fillColor: {
+                    linearGradient: {
+                        x1: 0,
+                        y1: 0,
+                        x2: 0,
+                        y2: 1
+                    },
+                    stops: [
+                        [0, Highcharts.getOptions().colors[0]],
+                        [1, Highcharts.Color(Highcharts.getOptions().colors[0]).setOpacity(0).get('rgba')]
+                    ]
+                },
+                marker: {
+                    radius: 2
+                },
+                lineWidth: 1,
+                states: {
+                    hover: {
+                        lineWidth: 1
+                    }
+                },
+                threshold: null
+            }
+        },
 
-    var xAxis = d3.axisBottom(x).ticks(5);
-
-    var yAxis = d3.axisLeft(y).ticks(5);
-
-    var valueline = d3.line()
-        .x(function (d) {
-            return x(d.date);
-        })
-        .y(function (d) {
-            return y(d.y);
-        });
-    var divSelector = "#" + divId;
-    d3.select(divSelector).select("svg").remove();
-    var svg = d3.select(divSelector)
-        .append("svg")
-        .attr("width", width + margin.left + margin.right)
-        .attr("height", height + margin.top + margin.bottom)
-        .append("g")
-        .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
-
-    // Scale the range of the data
-    x.domain(d3.extent(data, function (d) {
-        return d.date;
-        }));
-    y.domain([0, d3.max(data, function (d) {
-        return d.y;
-        })]);
-
-    svg.append("path") // Add the valueline path.
-    .attr("d", valueline(data));
-
-    svg.append("g") // Add the X Axis
-    .attr("class", "x axis")
-        .attr("transform", "translate(0," + height + ")")
-        .call(xAxis);
-
-    svg.append("g") // Add the Y Axis
-    .attr("class", "y axis")
-        .call(yAxis);
+        series: [{
+            type: 'area',
+            name: options.yAxisTitle,
+            data: data
+        }]
+});
 }
