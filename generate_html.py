@@ -7,13 +7,17 @@ class HtmlGenerator(object):
         self.output_directory = os.path.join(directory, "git_stats")
         self.curr_dir = curr_dir
         self.data_to_plot = {}
-        for data, time_granularity in ((self.collector.per_day, 'day'),
-                                       (self.collector.per_week, 'week')):
+        one_day = int(3600.0 * 24.0)
+        for data, time_granularity, delta in ((self.collector.per_day,
+                                               'day', one_day),
+                                              (self.collector.per_week,
+                                               'week', 7 * one_day)):
             data_at_time_granularity = self.data_to_plot.setdefault(time_granularity, {})
-            data_at_time_granularity['nb_commits'] = self.collector.nb_commits(data)
-            data_at_time_granularity['nb_added_lines'] = self.collector.nb_added_lines(data)
-            data_at_time_granularity['avg_size_of_commits'] = self.collector.avg_size_of_commits(data)
-            data_at_time_granularity['nb_active_authors'] = self.collector.nb_active_authors(data)
+            data_at_time_granularity['nb_commits'] = self.collector.nb_commits(data,
+                                                                               delta)
+            data_at_time_granularity['nb_added_lines'] = self.collector.nb_added_lines(data, delta)
+            data_at_time_granularity['avg_size_of_commits'] = self.collector.avg_size_of_commits(data, delta)
+            data_at_time_granularity['nb_active_authors'] = self.collector.nb_active_authors(data, delta)
 
     @staticmethod
     def compute_varname(name, value):

@@ -3,6 +3,15 @@ import time
 import os
 import re
 import platform
+from itertools import tee
+from itertools import izip
+
+
+def pairwise(iterable):
+    "s -> (s0,s1), (s1,s2), (s2, s3), ..."
+    a, b = tee(iterable)
+    next(b, None)
+    return izip(a, b)
 
 #TODO: add propper taken from GitStats mention
 ON_LINUX = (platform.system() == 'Linux')
@@ -155,24 +164,43 @@ class DataCollector(object):
         return [(k, f(v)) for (k, v) in data]
 
     @classmethod
-    def format_data(cls, data):
-        return cls.filter_outliers(cls.sort_data(data))
+    def put_explicit_zeros(cls, data, delta):
+        x = [xy[0] for xy in data]
+        min_x = int(min(x))
+        max_x = int(max(x))
+        res = {x: 0 for x in range(min_x, max_x + delta, delta)}
+        for xy in data:
+            res[float(xy[0])] = xy[1]
+        return sorted(res.iteritems(),
+                      key=lambda x: x[0])
 
     @classmethod
-    def nb_commits(cls, data):
-        return cls.format_data({k: len(v) for (k, v) in data.iteritems()})
+    def format_data(cls, data, delta, add_zero=True):
+        res = cls.filter_outliers(cls.sort_data(data))
+        if add_zero:
+            res = cls.put_explicit_zeros(res, delta)
+        return res
 
     @classmethod
-    def nb_added_lines(cls, data):
+    def nb_commits(cls, data, delta):
+        return cls.format_data({k: len(v) for (k, v) in data.iteritems()},
+                               delta)
+
+    @classmethod
+    def nb_added_lines(cls, data, delta):
         return cls.format_data({k: sum(x.nb_insert - x.nb_delete for x in v)
-                                for (k, v) in data.iteritems()})
+                                for (k, v) in data.iteritems()},
+                               delta)
 
     @classmethod
-    def avg_size_of_commits(cls, data):
+    def avg_size_of_commits(cls, data, delta):
         return cls.format_data({k: Utils.average([x.size() for x in v])
-                                for (k, v) in data.iteritems()})
+                                for (k, v) in data.iteritems()},
+                               delta,
+                               add_zero=False)
 
     @classmethod
-    def nb_active_authors(cls, data):
+    def nb_active_authors(cls, data, delta):
         return cls.format_data({k: len(set([x.author for x in v]))
-                                for (k, v) in data.iteritems()})
+                                for (k, v) in data.iteritems()},
+                               delta)
