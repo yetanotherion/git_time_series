@@ -71,7 +71,8 @@ class Utils(object):
 
     @classmethod
     def get_local_week(cls, timestamp):
-        return cls.approximate_to_format('%Y-%W', timestamp)
+        day = cls.get_local_day(timestamp)
+        return day - int(time.strftime('%w', time.localtime(day))) * 3600 * 24.0
 
     @staticmethod
     def average(l):
