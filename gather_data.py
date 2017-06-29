@@ -3,9 +3,11 @@ import time
 import os
 import re
 import platform
+
 from itertools import tee
 from itertools import izip
-
+from sklearn.cluster import KMeans
+import numpy as np
 
 def pairwise(iterable):
     "s -> (s0,s1), (s1,s2), (s2, s3), ..."
@@ -36,12 +38,13 @@ def getpipeoutput(cmds, quiet = False, cwd=None):
 
 
 class Commit(object):
-    def __init__(self, timestamp, author, nb_files_changed, nb_insert, nb_delete):
+    def __init__(self, timestamp, author, nb_files_changed, nb_insert, nb_delete, sha1):
         self.timestamp = timestamp
         self.author = author
         self.nb_files_changed = nb_files_changed
         self.nb_insert = nb_insert
         self.nb_delete = nb_delete
+        self.sha1 = sha1
 
     def size(self):
         return self.nb_insert - self.nb_delete
@@ -50,13 +53,17 @@ class CommitBuilder(object):
     def __init__(self):
         self.timestamp = None
         self.author = None
+        self.sha1 = None
         self.nb_files_changed = None
         self.nb_insert = None
         self.nb_delete = None
 
     def build(self):
-        return Commit(self.timestamp, self.author, self.nb_files_changed,
-                      self.nb_insert, self.nb_delete)
+        res = Commit(self.timestamp, self.author, self.nb_files_changed,
+                      self.nb_insert, self.nb_delete, self.sha1)
+        if abs(res.size()) > 1000:
+            print "BIG commit: %d, %s" % (res.size(), res.sha1)
+        return res
 class Utils(object):
 
     @staticmethod
@@ -115,7 +122,7 @@ class DataCollector(object):
         return valid_line, files, inserted, deleted
 
     def run(self):
-        lines = getpipeoutput(['git log --shortstat --pretty=format:"%at %an"'],
+        lines = getpipeoutput(['git log --shortstat --pretty=format:"%at %an %H"'],
                               cwd=self.directory).split('\n')
         commit_builder = None
         for line in filter(lambda x: bool(x),
@@ -131,7 +138,8 @@ class DataCollector(object):
                 splited_line = line.split(' ')
                 commit_builder = CommitBuilder()
                 commit_builder.timestamp = float(splited_line[0])
-                commit_builder.author = ' '.join(splited_line[1:])
+                commit_builder.author = ' '.join(splited_line[1:-1])
+                commit_builder.sha1 = splited_line[-1]
         self.per_day = Utils.group_by(self.commits,
                                       lambda x: Utils.get_local_day(x.timestamp))
         self.per_week = Utils.group_by(self.commits,
@@ -142,26 +150,39 @@ class DataCollector(object):
                       key=lambda x: x[0])
 
     @staticmethod
-    def filter_outliers(data):
-        values = [x[1] for x in data]
-        pos_values = [x for x in values if x > 0]
-        average_pos = Utils.average(pos_values)
-        neg_values = [x for x in values if x < 0]
-        average_neg = Utils.average(neg_values)
-
-        threshold = 10
-        max_value = average_pos * threshold
-        min_value = average_neg * threshold
-        def f(x):
-            if x > 0:
-                if x < max_value:
-                    return x
-                return max_value + threshold # to find outliers
+    def filter_outliers(data, threshold=100):
+        kmeans = KMeans(init='random', n_clusters=2, n_init=10)
+        X = np.array([[abs(xy[1])] for xy in data])
+        kmeans.fit(X)
+        res_one, res_two = [], []
+        res_one_center = None
+        for xy in data:
+            center = kmeans.predict(abs(xy[1]))
+            if res_one_center is None or res_one_center == center:
+                res_one_center = center
+                res_one.append(xy)
             else:
-                if x > min_value:
-                    return x
-                return min_value - threshold
-        return [(k, f(v)) for (k, v) in data]
+                res_two.append(xy)
+        def f(xys):
+            return [abs(xy[1]) for xy in xys]
+        y_one, y_two = f(res_one), f(res_two)
+        min_one, max_one = min(y_one), max(y_one)
+        min_two, max_two = min(y_two), max(y_two)
+        if max_one > max_two:
+            temp = res_one
+            res_one = res_two
+            res_two = temp
+        y_one, y_two = f(res_one), f(res_two)
+        max_one, min_two = max(y_one), min(y_two)
+        diff = min_two - max_one
+        thresold_estimator = diff / max_one
+        print min_one, max_one, min_two, max_two
+        print thresold_estimator
+        if thresold_estimator > threshold:
+            print "skipping %d out of %d elements (%.2f)" % (len(res_two), len(data), len(res_two) / float(len(data)) * 100.0)
+            return res_one
+        return data
+
 
     @classmethod
     def put_explicit_zeros(cls, data, delta):
@@ -191,6 +212,22 @@ class DataCollector(object):
         return cls.format_data({k: sum(x.nb_insert - x.nb_delete for x in v)
                                 for (k, v) in data.iteritems()},
                                delta)
+
+    @classmethod
+    def nb_lines(cls, data, delta):
+        if not data:
+            return data
+
+        def f(accum, xy):
+            x, y = xy[0], xy[1]
+            new_point = [x, accum[-1][1] + y]
+            accum.append(new_point)
+            return accum
+        added_lines = cls.format_data({k: sum(x.nb_insert - x.nb_delete for x in v)
+                                       for (k, v) in data.iteritems()},
+                                      delta,
+                                      add_zero=False)
+        return reduce(f, added_lines[1:], [added_lines[0]])
 
     @classmethod
     def avg_size_of_commits(cls, data, delta):

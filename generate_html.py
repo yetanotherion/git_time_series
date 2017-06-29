@@ -16,6 +16,8 @@ class HtmlGenerator(object):
             data_at_time_granularity['nb_commits'] = self.collector.nb_commits(data,
                                                                                delta)
             data_at_time_granularity['nb_added_lines'] = self.collector.nb_added_lines(data, delta)
+            data_at_time_granularity['nb_lines'] = self.collector.nb_lines(data, delta)
+
             data_at_time_granularity['avg_size_of_commits'] = self.collector.avg_size_of_commits(data, delta)
             data_at_time_granularity['nb_active_authors'] = self.collector.nb_active_authors(data, delta)
 
